@@ -40,6 +40,11 @@ def run_cascade(problem_id: str, cheap_model: str, premium_model: str,
         "cheap_passed": cheap["passed"],
         "cheap_pass_rate": cheap["pass_rate"],
         "cheap_latency_ms": cheap["latency_ms"],
+        # per-test exception detail is NOT a debug field — it's the
+        # evaluator's own structured verdict, and the recovery-by-failure-type
+        # question needs it on every row, so it's recorded unconditionally
+        # (an empty list on a clean pass) rather than gated on escalation.
+        "cheap_failed_tests": cheap["failed_tests"],
         "escalated": not cheap["passed"],
     }
     # keep the cheap attempt's own debug fields (raw response/output,
@@ -56,6 +61,7 @@ def run_cascade(problem_id: str, cheap_model: str, premium_model: str,
             "premium_passed": None,
             "premium_pass_rate": None,
             "premium_latency_ms": None,
+            "premium_failed_tests": None,
             "final_model": "cheap",
             "final_status": cheap["status"],
             "final_passed": True,
@@ -69,6 +75,7 @@ def run_cascade(problem_id: str, cheap_model: str, premium_model: str,
         "premium_passed": premium["passed"],
         "premium_pass_rate": premium["pass_rate"],
         "premium_latency_ms": premium["latency_ms"],
+        "premium_failed_tests": premium["failed_tests"],
         "final_model": "premium",
         "final_status": premium["status"],
         "final_passed": premium["passed"],

@@ -19,9 +19,28 @@ backed by a verified test run, not assumed.
   logic/comprehension bugs on all 4; premium fails via a MIX of
   schema-contract violations (dict output problems) and genuine
   algorithmic bugs (stress_004, graph/topological reasoning) — NOT a
-  clean "cheap=logic, premium=schema" split. Aggregate: cheap 8/32
-  (25%), premium 14/32 (43.75%). n=32 is an exploration signal, not a
-  statistical claim about the model family.
+  clean "cheap=logic, premium=schema" split. Aggregate: cheap 10/32
+  (31.25%), premium 14/32 (43.75%). n=32 is an exploration signal, not
+  a statistical claim about the model family.
+
+  **Why cheap's number changed from 8/32 (25%) to 10/32 (31.25%):**
+  this is a MEASUREMENT change, not a model behavior change. The
+  evaluator now awards partial credit for tests that actually completed
+  before a TIMEOUT cut execution off, where the old code zeroed the
+  entire run via a bare `execution_failed` flag. The affected run is
+  stress_003 cheap: `test_0` and `test_8` passed, then `test_9` hung,
+  so it moved 0.0 -> 0.2 (2/10) and the aggregate moved by those same
+  2 tests.
+
+  This was confirmed, not assumed. The generated code for that run is
+  byte-identical between the original stress sweep and the Stage 1
+  cascade sweep — as is every other cheap and premium generation in
+  the set — so temperature=0/seed=42 reproducibility holds across
+  sessions and the only thing that differed was how the result was
+  scored. The old 8/32 figure was not wrong for the scoring rule in
+  place at the time; it undercounted because that rule could not
+  distinguish "hung having completed nothing" from "hung partway
+  through."
 - **Stage 1 (cascade.py, run_cascade.py, analyze_cascade.py):** JUST
   BUILT, not yet run against real data. This is the immediate next
   task — see below.

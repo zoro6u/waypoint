@@ -5,12 +5,13 @@ import sys
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
 import cascade
 
-def rec(tag, status, passed, pass_rate, latency):
+def rec(tag, status, passed, pass_rate, latency, failed_tests=None):
     return {"problem_id": "t_001", "source": "stress", "difficulty": "stress",
             "task_type": "composite", "model": tag, "model_name": f"m-{tag}",
             "status": status, "passed": passed, "pass_rate": pass_rate,
             "latency_ms": latency, "tests_passed": 0, "tests_total": 7,
-            "failed_tests": [], "_raw_response": f"{tag} raw",
+            "failed_tests": failed_tests if failed_tests is not None else [],
+            "_raw_response": f"{tag} raw",
             "_extracted_code": f"{tag} code", "_raw_output": f"{tag} out"}
 
 fails, checks = [], []
@@ -32,6 +33,8 @@ check("no-esc: final_passed", r["final_passed"], True)
 check("no-esc: premium_status None", r["premium_status"], None)
 check("no-esc: total_latency", r["total_latency_ms"], 20000)
 check("no-esc: no debug fields leaked", [k for k in r if k.startswith("_")], [])
+check("no-esc: cheap_failed_tests recorded as []", r["cheap_failed_tests"], [])
+check("no-esc: premium_failed_tests None", r["premium_failed_tests"], None)
 
 # --- cheap FAILS, premium RECOVERS ---------------------------------
 calls = []
@@ -74,6 +77,29 @@ cascade.run_one = stub_extract
 r = cascade.run_cascade("t_001", "cheap-m", "prem-m")
 check("extract-fail escalates", r["escalated"], True)
 check("extract-fail recovered", r["final_passed"], True)
+
+# --- failed_tests PROPAGATION: the field cascade.py used to drop -----
+CHEAP_FT = [{"index": 1, "exception_type": "KeyError"},
+            {"index": 2, "exception_type": "AssertionError"}]
+PREM_FT = [{"index": 3, "exception_type": "AssertionError"}]
+def stub_ft(pid, model, tag, timeout_s=10, dataset_path=None):
+    if tag == "cheap":
+        return rec(tag, "RUNTIME_ERROR", False, 0.42, 30000, failed_tests=CHEAP_FT)
+    return rec(tag, "VALUE_MISMATCH", False, 0.25, 110000, failed_tests=PREM_FT)
+cascade.run_one = stub_ft
+r = cascade.run_cascade("t_001", "cheap-m", "prem-m")
+check("ft: cheap_failed_tests survives router", r["cheap_failed_tests"], CHEAP_FT)
+check("ft: premium_failed_tests survives router", r["premium_failed_tests"], PREM_FT)
+check("ft: cheap exception types readable without re-parsing text",
+      [f["exception_type"] for f in r["cheap_failed_tests"]],
+      ["KeyError", "AssertionError"])
+# must survive the log round-trip too, since these are NOT _-prefixed
+# debug fields and so must not be stripped on either branch
+import json as _json
+check("ft: survives json round-trip",
+      _json.loads(_json.dumps(r))["cheap_failed_tests"], CHEAP_FT)
+check("ft: not treated as a debug field",
+      any(k.startswith("_") and "failed_tests" in k for k in r), False)
 
 print(f"{'CASE':<40} RESULT")
 for n, ok, got, want in checks:
