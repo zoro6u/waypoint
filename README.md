@@ -1,5 +1,14 @@
 # waypoint — pilot runner
 
+An LLM cost/quality routing gateway, built as a research pipeline first:
+Ollama (local models) → code extraction → Podman-sandboxed pytest execution →
+structured pass/fail telemetry.
+
+**For what was actually measured — including the two interpretations that had
+to be revised, the evaluator bug that shifted a recorded figure, and the
+open limitations — see [EXPERIMENTAL_FINDINGS.md](EXPERIMENTAL_FINDINGS.md).**
+The rest of this file is setup and operating instructions.
+
 ## What's actually verified vs. what isn't
 
 This code was written in a sandbox with **no Podman and no Ollama available**,

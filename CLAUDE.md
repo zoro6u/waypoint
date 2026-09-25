@@ -9,59 +9,43 @@ rigor, not a working product yet — every claim in this repo has to be
 backed by a verified test run, not assumed.
 
 ## Current status
-- **Stage 0 (pilot_dataset.json, 12 problems, MBPP + matched
-  handwritten):** DONE. Result: qwen2.5-coder:1.5b (cheap) and
-  qwen2.5-coder:7b (premium) both scored 100% pass — a "saturated
-  benchmark," documented as a real negative result, not hidden.
-- **Stress series (stress_dataset.json, 4 problems, composite
-  multi-step tasks):** DONE. Revised finding after tracing actual
-  generated code (not just pass/fail numbers): cheap fails via
-  logic/comprehension bugs on all 4; premium fails via a MIX of
-  schema-contract violations (dict output problems) and genuine
-  algorithmic bugs (stress_004, graph/topological reasoning) — NOT a
-  clean "cheap=logic, premium=schema" split. Aggregate: cheap 10/32
-  (31.25%), premium 14/32 (43.75%). n=32 is an exploration signal, not
-  a statistical claim about the model family.
+**`EXPERIMENTAL_FINDINGS.md` is the full chronological narrative** — what was
+assumed at each stage, what the data showed, and what had to be corrected.
+Read it there rather than duplicating a summary here that would go stale.
 
-  **Why cheap's number changed from 8/32 (25%) to 10/32 (31.25%):**
-  this is a MEASUREMENT change, not a model behavior change. The
-  evaluator now awards partial credit for tests that actually completed
-  before a TIMEOUT cut execution off, where the old code zeroed the
-  entire run via a bare `execution_failed` flag. The affected run is
-  stress_003 cheap: `test_0` and `test_8` passed, then `test_9` hung,
-  so it moved 0.0 -> 0.2 (2/10) and the aggregate moved by those same
-  2 tests.
+Where things stand:
+- **Stage 0 (`pilot_dataset.json`, 12 problems):** DONE. Saturated benchmark —
+  both tiers 100%. Retained as the cascade's zero-escalation control.
+- **Stress series (`stress_dataset.json`, `stress_001`-`004`):** DONE.
+  Aggregate: cheap 10/32 (31.25%), premium 14/32 (43.75%).
+- **Stage 1 cascade:** DONE, both datasets. Logs:
+  `logs/cascade_stress_log.jsonl`, `logs/cascade_pilot_log.jsonl`.
+- **`schema_probe` (experimental shadow path):** RUN. 3/3 pre-registered
+  predictions matched; 1/3 recovery. Log: `logs/schema_probe_log.jsonl`.
+- Verified test suites: 34 + 29 + 31 = 94 synthetic checks across
+  `test_status_taxonomy.py`, `test_cascade_shape.py`, `test_schema_probe.py`.
 
-  This was confirmed, not assumed. The generated code for that run is
-  byte-identical between the original stress sweep and the Stage 1
-  cascade sweep — as is every other cheap and premium generation in
-  the set — so temperature=0/seed=42 reproducibility holds across
-  sessions and the only thing that differed was how the result was
-  scored. The old 8/32 figure was not wrong for the scoring rule in
-  place at the time; it undercounted because that rule could not
-  distinguish "hung having completed nothing" from "hung partway
-  through."
-- **Stage 1 (cascade.py, run_cascade.py, analyze_cascade.py):** BUILT
-  AND RUN against both datasets. Logs: `logs/cascade_stress_log.jsonl`,
-  `logs/cascade_pilot_log.jsonl`.
-  - pilot (n=12): cheap 12/12, escalation 0/12, final 12/12. The
-    expected sanity check on already-saturated data — the router never
-    reached premium.
-  - stress (n=4): cheap 0/4, escalation 4/4, premium recovery 1/4,
-    final 1/4. Escalated rows cost ~134s total vs ~29s for cheap alone,
-    so escalation is roughly 5x the latency for one recovery in four.
-  - Recovery by cheap failure type (n=1 per cell — directional only, NOT
-    a basis for a Stage 2 routing rule): VALUE_MISMATCH 0/2,
-    RUNTIME_ERROR 0/1, TIMEOUT 1/1. The single recovery came from the
-    TIMEOUT row.
-  - No runner_error rows in either sweep. `ollama_client.py`'s read
-    timeout was raised 120s -> 300s first: premium latencies of 81-113s
-    were running at up to 98% of the old 120s ceiling, which is what
-    killed stress_004 premium in the earlier stress run. This is a
-    transport setting, not part of the benchmark definition.
-  - Reproducibility confirmed across sessions: every cheap and premium
-    generation in the stress cascade is byte-identical to the original
-    stress sweep.
+### Deliberately deferred — NOT forgotten
+Both of these are recorded decisions. Do not treat either as an oversight to
+be quietly fixed, and do not start either without asking.
+
+- **`stress_005` — known coverage gap, not yet addressed.** `stress_001`'s
+  test set does not discriminate a tie-break bug we know is present in the
+  recovered premium code (it compares per-record revenue against
+  `top_product_revenue` rather than accumulated per-product revenue, and
+  passes all 7 tests anyway). Rule 3 forbids adding a discriminating test to
+  a problem already run against models, so closing this needs a NEW problem.
+  Deferred pending a decision on scope.
+- **`schema_probe`-as-a-feature — research hypothesis pending more
+  evidence.** Nothing in the production path uses it; it is a diagnostic that
+  showed our failure-mode labeling was wrong. Whether output-shape repair
+  belongs in a real gateway is open, and specifically pending a dataset where
+  more than one problem exercises it.
+
+Other open limitations (sample size, `schema_probe`'s depth=1 limit, the
+untested CRASH/TIMEOUT heuristic, the one stale log row, single model family)
+are catalogued in `EXPERIMENTAL_FINDINGS.md` under "Known Limitations / Open
+Questions". That section is the canonical list.
 
 ## Non-negotiable methodology rules
 These encode decisions already made deliberately; do not change them
