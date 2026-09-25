@@ -81,6 +81,21 @@ check("RUNTIME_ERROR exc types",
       sorted(f["exception_type"] for f in r["failed_tests"]),
       ["AssertionError", "KeyError"])
 
+# --- 3b. completed run, summary block present but type unparseable ---
+# must use the bare "Unknown" label, NOT the truncated one: a completed run
+# that still yields no type is the signature of the old parsing bug
+out = (hdr(2)
+       + "test_solution.py::test_0 PASSED\n"
+       + "test_solution.py::test_1 FAILED\n\n"
+       + "=========================== short test summary info =========\n"
+       + "FAILED test_solution.py::test_1 - !!!malformed!!!\n")
+patch(out)
+r = sandbox.run_in_sandbox("x=1", ["a", "b"], timeout_s=10)
+check("completed-run: unparseable type keeps bare Unknown",
+      [f["exception_type"] for f in r["failed_tests"]], ["Unknown"])
+check("completed-run: does NOT use the truncated label",
+      any(f["exception_type"] == "UNKNOWN_TRUNCATED" for f in r["failed_tests"]), False)
+
 # --- 4. CRASH: zero result lines, returned FAST ---------------------
 out = ("=========================== ERRORS ==========================\n"
        "ImportError while importing test module '/sandbox/test_solution.py'.\n"
@@ -121,8 +136,14 @@ check("TIMEOUT-partial: failed_tests no longer dropped",
       [f["index"] for f in r["failed_tests"]], [1, 2, 3, 4, 5, 6, 7])
 check("TIMEOUT-partial: hung test NOT counted as failed",
       9 in [f["index"] for f in r["failed_tests"]], False)
-check("TIMEOUT-partial: exc type Unknown when pytest never reported it",
-      {f["exception_type"] for f in r["failed_tests"]}, {"Unknown"})
+check("TIMEOUT-partial: truncated label used, NOT bare Unknown",
+      {f["exception_type"] for f in r["failed_tests"]}, {"UNKNOWN_TRUNCATED"})
+# the two unknown-labels must stay distinct strings: the whole point of the
+# rename is that telling them apart never depends on comment or test context
+check("TIMEOUT-partial: truncated label != completed-run parse-failure label",
+      sandbox.EXC_UNKNOWN_TRUNCATED != sandbox.EXC_UNKNOWN_PARSE, True)
+check("TIMEOUT-partial: no bare 'Unknown' leaks onto a TIMEOUT row",
+      any(f["exception_type"] == "Unknown" for f in r["failed_tests"]), False)
 
 # a truncated run that DID emit a summary block keeps the real types
 out2 = (hdr(5)

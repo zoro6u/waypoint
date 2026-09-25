@@ -36,6 +36,11 @@ first match wins):
                  plain AssertionError (code ran, answer was wrong).
   PASS           every test passed.
 
+A failed test whose exception type could not be determined is labeled
+UNKNOWN_TRUNCATED when pytest was killed before printing its summary block
+(expected on TIMEOUT), and "Unknown" when the run completed and the type
+still could not be parsed (suspicious — see EXC_UNKNOWN_PARSE below).
+
 (EXTRACTION_FAILED is not decided here — that happens in runner.py
 before this module is ever called, since it's a pre-execution failure
 this module has no visibility into.)
@@ -73,6 +78,19 @@ EXCEPTION_LINE_RE = re.compile(r"^FAILED test_solution\.py::test_(\d+) - (\w+):"
 # if a test genuinely hung until killed, treat "used >= this fraction of
 # the timeout budget" as evidence of a hang rather than a fast crash
 TIMEOUT_FRACTION_THRESHOLD = 0.8
+
+# Exception-type labels for a failed test whose type could not be read.
+# These are deliberately DIFFERENT strings, because they mean different
+# things and must never be conflated:
+#   UNKNOWN_TRUNCATED  pytest was killed before it printed the "short test
+#                      summary info" block, so no type was ever reported.
+#                      Expected and legitimate on a TIMEOUT.
+#   Unknown            the run COMPLETED, a summary block should therefore
+#                      exist, and the type still could not be parsed out of
+#                      it. That is suspicious — it is the signature of the
+#                      int/str key-mismatch bug this project hit before.
+EXC_UNKNOWN_TRUNCATED = "UNKNOWN_TRUNCATED"
+EXC_UNKNOWN_PARSE = "Unknown"
 
 
 def _build_test_file(tests: list) -> str:
@@ -160,12 +178,14 @@ def run_in_sandbox(code: str, tests: list, timeout_s: int = 10) -> dict:
             #
             # Exception types are usually unavailable here, because pytest is
             # killed before it prints the "short test summary info" block that
-            # EXCEPTION_LINE_RE reads. "Unknown" on a TIMEOUT row therefore
-            # means "pytest never reported it", which is expected — NOT the
-            # parsing bug that the same label indicated on a completed run.
+            # EXCEPTION_LINE_RE reads. That gets its OWN label,
+            # UNKNOWN_TRUNCATED, rather than sharing "Unknown" with the
+            # completed-run path — the two mean different things, and telling
+            # them apart should not depend on reading a comment or a test.
             passed_so_far = sum(1 for _, status in matches if status == "PASSED")
             failed_so_far = [
-                {"index": int(i), "exception_type": exception_by_index.get(int(i), "Unknown")}
+                {"index": int(i),
+                 "exception_type": exception_by_index.get(int(i), EXC_UNKNOWN_TRUNCATED)}
                 for i, status in matches if status != "PASSED"
             ]
             return _make_result("TIMEOUT", passed_so_far, tests_total, output, failed_so_far)
@@ -178,7 +198,8 @@ def run_in_sandbox(code: str, tests: list, timeout_s: int = 10) -> dict:
             return _make_result("PASS", passed, tests_total, output)
 
         failed_tests = [
-            {"index": int(i), "exception_type": exception_by_index.get(int(i), "Unknown")}
+            {"index": int(i),
+             "exception_type": exception_by_index.get(int(i), EXC_UNKNOWN_PARSE)}
             for i, status in matches if status != "PASSED"
         ]
         non_assertion = [f for f in failed_tests if f["exception_type"] != "AssertionError"]
