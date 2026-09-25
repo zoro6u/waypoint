@@ -30,16 +30,6 @@ from runner import DATASET_PATH, LOG_PATH, run_one
 TEST_LINE_RE = re.compile(r"^test_solution\.py::test_(\d+)\s+(PASSED|FAILED|ERROR)", re.MULTILINE)
 
 
-def _status_label(record: dict) -> str:
-    if record.get("extraction_failed"):
-        return "EXTRACT_FAIL"
-    if record.get("execution_failed"):
-        return "EXEC_FAIL"
-    if record.get("pass_rate") == 1.0:
-        return "PASS"
-    return "PARTIAL"
-
-
 def _per_test_summary(raw_output: str) -> str:
     """e.g. 'test_0=PASSED test_1=FAILED test_2=PASSED ...' — cheap way
     to see WHICH tests failed without re-running anything."""
@@ -84,16 +74,16 @@ def main():
             print(f"RUNNER_ERROR: {e}")
         else:
             elapsed = time.monotonic() - run_start
-            status = _status_label(record)
+            status = record.get("status", "UNKNOWN")
             print(f"{status} (pass_rate={record.get('pass_rate')}) [{elapsed:.1f}s]")
-            if status == "PARTIAL":
+            if status not in ("PASS", "EXTRACTION_FAILED"):
                 print(f"    {_per_test_summary(record.get('_raw_output', ''))}")
 
         # keep debug fields in the persisted log for anything that ISN'T a
         # clean pass — that's exactly when we need them to diagnose why.
         # Strip them (as before) only for full passes, to keep the common
         # case's log lean.
-        if _status_label(record) == "PASS" and "runner_error" not in record:
+        if record.get("status") == "PASS" and "runner_error" not in record:
             clean_record = {k: v for k, v in record.items() if not k.startswith("_")}
         else:
             clean_record = {

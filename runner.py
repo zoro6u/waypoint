@@ -56,21 +56,27 @@ def run_one(problem_id: str, model: str, tag: str, timeout_s: int = 10, dataset_
         "model_name": model,
         "temperature": 0.0,
         "latency_ms": gen["latency_ms"],
-        "extraction_failed": not extraction["success"],
-        "extraction_failure_reason": extraction["reason"],
     }
+    # ALWAYS keep the raw model response as a debug field — not just on
+    # extraction failure. We need this on the success path too, to be able
+    # to tell whether extraction actually picked the candidate we think it
+    # did (e.g. a model that writes a broken first attempt followed by a
+    # working correction in a second code block).
+    record["_raw_response"] = gen["response"][:3000]
 
     if not extraction["success"]:
         record.update({
-            "execution_failed": False,
+            "status": "EXTRACTION_FAILED",
+            "passed": False,
+            "extraction_failure_reason": extraction["reason"],
             "tests_passed": 0,
             "tests_total": len(problem["tests"]),
             "pass_rate": 0.0,
+            "failed_tests": [],
         })
-        record["_raw_response"] = gen["response"][:2000]  # debug only, stripped before logging
     else:
         result = run_in_sandbox(extraction["code"], problem["tests"], timeout_s=timeout_s)
-        record.update(result)  # includes "_raw_output", debug only
+        record.update(result)  # includes status, passed, ..., "_raw_output" (debug only)
         # keep the actual extracted code as a debug field too — knowing
         # WHICH tests failed is useless without being able to read WHY
         record["_extracted_code"] = extraction["code"]
@@ -97,7 +103,7 @@ def main():
     # when the run ISN'T a clean pass — that's exactly when they're needed
     # to diagnose why, and stripping them for the common full-pass case
     # keeps the log lean.
-    is_clean_pass = not record.get("extraction_failed") and not record.get("execution_failed") and record.get("pass_rate") == 1.0
+    is_clean_pass = record.get("status") == "PASS"
     if is_clean_pass:
         clean_record = {k: v for k, v in record.items() if not k.startswith("_")}
     else:

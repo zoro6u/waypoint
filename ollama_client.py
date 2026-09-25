@@ -16,7 +16,7 @@ import requests
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
 
-def call_ollama(model: str, prompt: str, temperature: float = 0.0, seed: int = 42, timeout_s: int = 120) -> dict:
+def call_ollama(model: str, prompt: str, temperature: float = 0.0, seed: int = 42, timeout_s: int = 180) -> dict:
     """
     Returns {"response": str, "latency_ms": int}.
     Raises requests.RequestException on a connection/timeout failure —

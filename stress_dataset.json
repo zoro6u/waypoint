@@ -59,5 +59,24 @@
       "assert merge_bookings([(2*i, 2*i+1, 'A') for i in range(50000)]) == {'A': [(2*i, 2*i+1) for i in range(50000)]}"
     ],
     "notes": "Third companion in the same-hypothesis stress series (stress_001: dict aggregation, stress_002: filtering/temporal aggregation, this one: interval/state reasoning) — deliberately a different algorithmic surface (not aggregation-in-disguise) to test whether the cheap=logic-bug / premium=contract-violation pattern generalizes or was specific to aggregation tasks. test_8 (index 8) checks input immutability via a single-line walrus-operator trick (calls the function on a fresh list, then compares that same list object against its original literal value — verified to correctly fail against a deliberately mutating implementation). test_9 is the timing/complexity proxy: 50,000 fully disjoint, non-adjacent intervals force any implementation that scans all previously-merged intervals per new booking (instead of sorting once up front) toward O(n^2); measured ~18.8s locally for that specific naive pattern vs ~0.02s for the sort-then-single-pass approach, against the pipeline's 10s timeout. As before: this is a resource-budget proxy, not a proof of Big-O."
+  },
+  {
+    "id": "stress_004",
+    "source": "stress",
+    "difficulty": "stress",
+    "task_type": "composite",
+    "function_name": "schedule_tasks",
+    "language": "python",
+    "prompt": "Write a Python function named `schedule_tasks` that takes a list of tasks, `tasks`. Each task is a tuple `(name, duration, dependencies)` where `name` is a string, `duration` is a non-negative integer, and `dependencies` is a list of task names (strings) that must finish before this task can start. Every name referenced in `dependencies` is guaranteed to also appear as a task in `tasks`, and there are no dependency cycles.\n\nA task's start time is the moment all of its dependencies have finished (the maximum of their end times), or 0 if it has no dependencies. Its end time is `start_time + duration`. There is no limit on how many tasks can be running at the same time — the only constraint on a task is its own dependencies.\n\nReturn a list of `(name, start_time, end_time)` tuples, one per task (every task from `tasks` must appear exactly once), sorted by `start_time`, and by `name` (alphabetically) to break ties between tasks with the same start time.",
+    "tests": [
+      "assert schedule_tasks([]) == []",
+      "assert schedule_tasks([('A', 5, [])]) == [('A', 0, 5)]",
+      "assert schedule_tasks([('A', 3, []), ('B', 2, ['A'])]) == [('A', 0, 3), ('B', 3, 5)]",
+      "assert schedule_tasks([('A', 2, []), ('B', 3, ['A']), ('C', 1, ['B'])]) == [('A', 0, 2), ('B', 2, 5), ('C', 5, 6)]",
+      "assert schedule_tasks([('B', 2, []), ('A', 3, [])]) == [('A', 0, 3), ('B', 0, 2)]",
+      "assert schedule_tasks([('A', 2, []), ('B', 3, []), ('C', 1, ['A', 'B'])]) == [('A', 0, 2), ('B', 0, 3), ('C', 3, 4)]",
+      "assert schedule_tasks([('A', 1, []), ('B', 2, ['A']), ('C', 5, ['A']), ('D', 1, ['B', 'C'])]) == [('A', 0, 1), ('B', 1, 3), ('C', 1, 6), ('D', 6, 7)]"
+    ],
+    "notes": "Fourth stress problem — deliberately keeps the SAME output shape as stress_003 (list[tuple], no dict) to isolate the output-shape hypothesis refined after stress_003: premium's failures in stress_001/002 were on dict outputs with a named, fixed-key schema (an extra key broke the exact-match test); stress_003 (list[tuple] output) had no such schema surface and premium passed cleanly. This problem changes the TASK SURFACE completely (dependency/topological reasoning instead of interval merging) while holding output shape constant, to see if that holds. Deliberately NOT a timing/complexity stress case (no large-input test) — the goal here is isolating the output-shape variable, not re-testing performance under timeout, per explicit design decision to keep this problem purely functional. Prompt and tests are frozen before running either model; not to be revised after seeing results."
   }
 ]
