@@ -1,0 +1,41 @@
+[
+  {
+    "id": "stress_001",
+    "source": "stress",
+    "difficulty": "stress",
+    "task_type": "composite",
+    "function_name": "summarize_sales",
+    "language": "python",
+    "prompt": "Write a Python function named `summarize_sales` that takes a list of sales records, `records`. Each record is a tuple `(name, category, quantity, price)` where `quantity` and `price` are non-negative integers.\n\nReturn a dictionary mapping each category to another dictionary with exactly three keys:\n- \"items\": the total quantity sold in that category (sum of `quantity` across all records in the category).\n- \"revenue\": the total revenue in that category (sum of `quantity * price` across all records in the category).\n- \"top_product\": the name of the product with the highest total revenue within that category. A product's total revenue is the sum of `quantity * price` over every record for that product in that category (the same product name may appear in multiple records). If two or more products are tied for the highest revenue, return the one that is lexicographically smallest.\n\nCategories may appear in `records` in any order. If `records` is empty, return an empty dictionary.",
+    "tests": [
+      "assert summarize_sales([]) == {}",
+      "assert summarize_sales([('Widget', 'Tools', 5, 10)]) == {'Tools': {'items': 5, 'revenue': 50, 'top_product': 'Widget'}}",
+      "assert summarize_sales([('Widget', 'Tools', 2, 10), ('Widget', 'Tools', 3, 10)]) == {'Tools': {'items': 5, 'revenue': 50, 'top_product': 'Widget'}}",
+      "assert summarize_sales([('A', 'Cat1', 1, 10), ('B', 'Cat2', 2, 5)]) == {'Cat1': {'items': 1, 'revenue': 10, 'top_product': 'A'}, 'Cat2': {'items': 2, 'revenue': 10, 'top_product': 'B'}}",
+      "assert summarize_sales([('Bravo', 'Cat1', 1, 10), ('Alpha', 'Cat1', 2, 5)]) == {'Cat1': {'items': 3, 'revenue': 20, 'top_product': 'Alpha'}}",
+      "assert summarize_sales([('X', 'Cat1', 0, 0), ('Y', 'Cat1', 0, 0)]) == {'Cat1': {'items': 0, 'revenue': 0, 'top_product': 'X'}}",
+      "assert summarize_sales([(f'P{i}', f'cat{i%2}', 1, (i % 50) + 1) for i in range(40000)]) == {'cat0': {'items': 20000, 'revenue': 500000, 'top_product': 'P10048'}, 'cat1': {'items': 20000, 'revenue': 520000, 'top_product': 'P10049'}}"
+    ],
+    "notes": "Last test case (n=40000) is a timing/complexity proxy, not a correctness-only check: a correct O(n) or O(n log n) aggregation finishes in well under 1s; a plausible naive re-scan-per-product approach measured ~19s locally, comfortably past the pipeline's 10s sandbox timeout. This tests functional correctness under a fixed resource budget, not a proof of algorithmic complexity."
+  },
+  {
+    "id": "stress_002",
+    "source": "stress",
+    "difficulty": "stress",
+    "task_type": "composite",
+    "function_name": "sensor_summary",
+    "language": "python",
+    "prompt": "Write a Python function named `sensor_summary` that takes a list of sensor entries, `entries`. Each entry is a tuple `(sensor_id, reading, timestamp)` where `sensor_id` is a string, `timestamp` is a non-negative integer (unique per `sensor_id` — no two entries for the same sensor share a timestamp), and `reading` is EITHER a string representing an integer (which may start with `-`) OR the literal string \"ERR\", meaning that reading is corrupted and must be ignored entirely — it does not count as a valid reading for that sensor.\n\nReturn a dictionary mapping each `sensor_id` to another dictionary with exactly three keys, computed using only that sensor's valid (non-\"ERR\") readings:\n- \"count\": the number of valid readings for that sensor.\n- \"average\": the floor-divided integer average of that sensor's valid reading values (i.e. `total_sum // count`, not float division).\n- \"latest\": the integer value of the valid reading with the largest `timestamp` for that sensor. Only valid readings are considered for this — if the entry with the largest timestamp for a sensor happens to be \"ERR\", it is skipped, and the valid reading with the next-largest timestamp is used instead.\n\nA `sensor_id` with zero valid readings (every entry for it is \"ERR\", or it never appears) must NOT appear in the output at all. If `entries` is empty, return an empty dictionary.",
+    "tests": [
+      "assert sensor_summary([]) == {}",
+      "assert sensor_summary([('A', '10', 1)]) == {'A': {'count': 1, 'average': 10, 'latest': 10}}",
+      "assert sensor_summary([('A', '10', 1), ('A', 'ERR', 2), ('A', '20', 3)]) == {'A': {'count': 2, 'average': 15, 'latest': 20}}",
+      "assert sensor_summary([('A', 'ERR', 1), ('A', 'ERR', 2)]) == {}",
+      "assert sensor_summary([('A', '-3', 1), ('A', '-4', 2)]) == {'A': {'count': 2, 'average': -4, 'latest': -4}}",
+      "assert sensor_summary([('A', '100', 1), ('A', '5', 2)]) == {'A': {'count': 2, 'average': 52, 'latest': 5}}",
+      "assert sensor_summary([('A', '10', 1), ('A', 'ERR', 5), ('A', '20', 3)]) == {'A': {'count': 2, 'average': 15, 'latest': 20}}",
+      "assert sensor_summary([('A', 'ERR', 1), ('B', '6', 1), ('B', '9', 2), ('A', 'ERR', 2)]) == {'B': {'count': 2, 'average': 7, 'latest': 9}}"
+    ],
+    "notes": "Companion to stress_001, deliberately different composite shape: string-to-int parsing, filtering (ERR exclusion), floor division on negatives (traps truncation-toward-zero implementations), and a temporal 'latest by timestamp, not by value, among valid readings only' rule (traps both a naive max-by-value bug and, since the prompt makes the ERR-timestamp case explicit, tests instruction-following rather than spec-ambiguity guessing). No large-input timing case in this one — the goal here is testing whether the cheap/premium failure pattern seen on stress_001 (cheap: logic bug: premium: violates the exact-keys output contract) repeats on a different task shape, not re-testing the complexity/timeout mechanism."
+  }
+]
