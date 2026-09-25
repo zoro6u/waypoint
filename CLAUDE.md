@@ -41,9 +41,27 @@ backed by a verified test run, not assumed.
   place at the time; it undercounted because that rule could not
   distinguish "hung having completed nothing" from "hung partway
   through."
-- **Stage 1 (cascade.py, run_cascade.py, analyze_cascade.py):** JUST
-  BUILT, not yet run against real data. This is the immediate next
-  task — see below.
+- **Stage 1 (cascade.py, run_cascade.py, analyze_cascade.py):** BUILT
+  AND RUN against both datasets. Logs: `logs/cascade_stress_log.jsonl`,
+  `logs/cascade_pilot_log.jsonl`.
+  - pilot (n=12): cheap 12/12, escalation 0/12, final 12/12. The
+    expected sanity check on already-saturated data — the router never
+    reached premium.
+  - stress (n=4): cheap 0/4, escalation 4/4, premium recovery 1/4,
+    final 1/4. Escalated rows cost ~134s total vs ~29s for cheap alone,
+    so escalation is roughly 5x the latency for one recovery in four.
+  - Recovery by cheap failure type (n=1 per cell — directional only, NOT
+    a basis for a Stage 2 routing rule): VALUE_MISMATCH 0/2,
+    RUNTIME_ERROR 0/1, TIMEOUT 1/1. The single recovery came from the
+    TIMEOUT row.
+  - No runner_error rows in either sweep. `ollama_client.py`'s read
+    timeout was raised 120s -> 300s first: premium latencies of 81-113s
+    were running at up to 98% of the old 120s ceiling, which is what
+    killed stress_004 premium in the earlier stress run. This is a
+    transport setting, not part of the benchmark definition.
+  - Reproducibility confirmed across sessions: every cheap and premium
+    generation in the stress cascade is byte-identical to the original
+    stress sweep.
 
 ## Non-negotiable methodology rules
 These encode decisions already made deliberately; do not change them
@@ -95,26 +113,36 @@ without asking the user first:
 - `README.md` — setup instructions, what's verified vs. not
 
 ## Immediate task
-Run the Stage 1 cascade against BOTH datasets and report back an
-interpreted summary (not raw terminal output) using the metrics
-`analyze_cascade.py` produces — cheap_pass_rate, escalation_rate,
-premium_recovery_rate, final_pass_rate, latency, and the
-failure_type-vs-recovery table:
+The Stage 1 cascade sweeps are DONE — see Current status above for the
+numbers, and re-read the logs rather than re-running if you only need
+the results:
 
 ```bash
-python run_cascade.py --dataset stress_dataset.json --log logs/cascade_stress_log.jsonl
 python analyze_cascade.py --log logs/cascade_stress_log.jsonl
-
-python run_cascade.py --dataset pilot_dataset.json --log logs/cascade_pilot_log.jsonl
 python analyze_cascade.py --log logs/cascade_pilot_log.jsonl
 ```
 
-Note: pilot_dataset.json problems all had 100% pass rate for BOTH
-models in Stage 0, so expect escalation_rate ≈ 0 there — that's a
-useful sanity check that the cascade behaves correctly on already-known
-data, not a sign something's wrong.
+Re-running a sweep regenerates committed experimental data and costs
+~9 min (stress) / ~2 min (pilot). Generations are byte-identical under
+temperature=0/seed=42, so a re-run is only worth it when the LOGGED
+FIELDS need to change, not the results.
 
-After both sweeps, commit the new log files and any code changes to
-git with a clear message, then summarize findings for the user and
-ask what they want to look at next — do not automatically start
-designing Stage 2 or new stress problems without asking.
+In progress: `schema_probe.py`, an experimental shadow evaluation path
+for the schema-contract failures premium hit on stress_001/002 (extra
+keys such as `top_product_revenue` leaking into the returned dict). It
+derives the expected key set from the frozen tests, deletes extra keys
+only, re-runs the SAME frozen tests via the existing `run_in_sandbox`,
+and reports `schema_repair_recovery_rate` as a SEPARATE experimental
+metric. It never overwrites `final_pass_rate`, and `sandbox.py`,
+`runner.py` and both dataset files stay byte-identical.
+
+Known limit of that method, stated deliberately: the contract-vs-data
+key derivation is NOT general over nesting depth. It handles exactly
+`dict[data_key] -> dict[contract_key] -> scalar` and refuses anything
+else rather than guessing. See the module docstring.
+
+Do NOT start designing Stage 2 or adding new stress problems without
+asking first. Outstanding decisions the user has not settled:
+- Whether to re-run the stress sweep so stress_003's row picks up the
+  now-populated TIMEOUT `failed_tests` (currently `[]` in the committed
+  log, pre-fix).
