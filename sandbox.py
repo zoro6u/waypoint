@@ -150,14 +150,28 @@ def run_in_sandbox(code: str, tests: list, timeout_s: int = 10) -> dict:
                 return _make_result("TIMEOUT", 0, tests_total, output)
             return _make_result("CRASH", 0, tests_total, output)
 
+        exception_by_index = {int(i): exc for i, exc in EXCEPTION_LINE_RE.findall(output)}
+
         if len(matches) < tests_total:
-            # some tests completed, then output stopped — killed mid-run
+            # some tests completed, then output stopped — killed mid-run.
+            # The tests that DID complete still carry a verdict, so record
+            # them rather than discarding that detail: a truncated run tells
+            # us which assertions the model already got wrong before it hung.
+            #
+            # Exception types are usually unavailable here, because pytest is
+            # killed before it prints the "short test summary info" block that
+            # EXCEPTION_LINE_RE reads. "Unknown" on a TIMEOUT row therefore
+            # means "pytest never reported it", which is expected — NOT the
+            # parsing bug that the same label indicated on a completed run.
             passed_so_far = sum(1 for _, status in matches if status == "PASSED")
-            return _make_result("TIMEOUT", passed_so_far, tests_total, output)
+            failed_so_far = [
+                {"index": int(i), "exception_type": exception_by_index.get(int(i), "Unknown")}
+                for i, status in matches if status != "PASSED"
+            ]
+            return _make_result("TIMEOUT", passed_so_far, tests_total, output, failed_so_far)
 
         # every test produced a result line — classify by exception type
         # for the ones that failed
-        exception_by_index = {int(i): exc for i, exc in EXCEPTION_LINE_RE.findall(output)}
         passed = sum(1 for _, status in matches if status == "PASSED")
 
         if passed == tests_total:

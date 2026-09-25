@@ -90,6 +90,7 @@ r = sandbox.run_in_sandbox("foo(", ["a", "b"], timeout_s=10)
 check("CRASH status", r["status"], "CRASH")
 check("CRASH tests_passed", r["tests_passed"], 0)
 check("CRASH pass_rate", r["pass_rate"], 0.0)
+check("CRASH: no failed_tests (nothing ran)", r["failed_tests"], [])
 
 # --- 5. TIMEOUT (a): some tests ran, then output stopped ------------
 out = (hdr(10)
@@ -102,10 +103,44 @@ check("TIMEOUT-partial status", r["status"], "TIMEOUT")
 check("TIMEOUT-partial keeps partial count", r["tests_passed"], 2)
 check("TIMEOUT-partial tests_total", r["tests_total"], 10)
 
+# --- 5b. TIMEOUT partial: completed tests keep their verdicts --------
+# reproduces the REAL stress_003 cheap shape: 9 result lines, test_9 hung,
+# and no "short test summary info" block because pytest was killed
+out = (hdr(10)
+       + "test_solution.py::test_0 PASSED                    [ 10%]\n"
+       + "".join(f"test_solution.py::test_{i} FAILED                    [ {i}0%]\n"
+                for i in range(1, 8))
+       + "test_solution.py::test_8 PASSED                    [ 90%]\n"
+       + "test_solution.py::test_9 \n")
+patch(out)
+r = sandbox.run_in_sandbox("x=1", ["a"]*10, timeout_s=10)
+check("TIMEOUT-partial: status", r["status"], "TIMEOUT")
+check("TIMEOUT-partial: partial pass count", r["tests_passed"], 2)
+check("TIMEOUT-partial: pass_rate", r["pass_rate"], 0.2)
+check("TIMEOUT-partial: failed_tests no longer dropped",
+      [f["index"] for f in r["failed_tests"]], [1, 2, 3, 4, 5, 6, 7])
+check("TIMEOUT-partial: hung test NOT counted as failed",
+      9 in [f["index"] for f in r["failed_tests"]], False)
+check("TIMEOUT-partial: exc type Unknown when pytest never reported it",
+      {f["exception_type"] for f in r["failed_tests"]}, {"Unknown"})
+
+# a truncated run that DID emit a summary block keeps the real types
+out2 = (hdr(5)
+        + "test_solution.py::test_0 PASSED\n"
+        + "test_solution.py::test_1 FAILED\n"
+        + "test_solution.py::test_2 \n"
+        + "=========================== short test summary info =========\n"
+        + "FAILED test_solution.py::test_1 - KeyError: 'x'\n")
+patch(out2)
+r = sandbox.run_in_sandbox("x=1", ["a"]*5, timeout_s=10)
+check("TIMEOUT-partial: real exc type used when available",
+      [f["exception_type"] for f in r["failed_tests"]], ["KeyError"])
+
 # --- 6. TIMEOUT (b): zero lines AND consumed the timeout budget -----
 patch("(hung, nothing printed)", delay=0.9)
 r = sandbox.run_in_sandbox("while True: pass", ["a", "b"], timeout_s=1)
 check("TIMEOUT-hang status", r["status"], "TIMEOUT")
+check("TIMEOUT-hang: no failed_tests (nothing ran)", r["failed_tests"], [])
 
 # --- 7. TIMEOUT: outer subprocess safety net fired -----------------
 patch("", raise_timeout=True)
