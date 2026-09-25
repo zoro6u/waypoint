@@ -37,5 +37,27 @@
       "assert sensor_summary([('A', 'ERR', 1), ('B', '6', 1), ('B', '9', 2), ('A', 'ERR', 2)]) == {'B': {'count': 2, 'average': 7, 'latest': 9}}"
     ],
     "notes": "Companion to stress_001, deliberately different composite shape: string-to-int parsing, filtering (ERR exclusion), floor division on negatives (traps truncation-toward-zero implementations), and a temporal 'latest by timestamp, not by value, among valid readings only' rule (traps both a naive max-by-value bug and, since the prompt makes the ERR-timestamp case explicit, tests instruction-following rather than spec-ambiguity guessing). No large-input timing case in this one — the goal here is testing whether the cheap/premium failure pattern seen on stress_001 (cheap: logic bug: premium: violates the exact-keys output contract) repeats on a different task shape, not re-testing the complexity/timeout mechanism."
+  },
+  {
+    "id": "stress_003",
+    "source": "stress",
+    "difficulty": "stress",
+    "task_type": "composite",
+    "function_name": "merge_bookings",
+    "language": "python",
+    "prompt": "Write a Python function named `merge_bookings` that takes a list of bookings, `bookings`. Each booking is a tuple `(start, end, room)` where `start` and `end` are integers with `start <= end` (a zero-length booking with `start == end` is allowed), and `room` is a string identifying the room. The same room may appear in multiple bookings.\n\nFor each room, merge any of its bookings that overlap or touch (one booking's `start` is less than or equal to another overlapping/adjacent booking's `end`) into combined `(start, end)` intervals. Return a dictionary mapping each room to a list of its merged `(start, end)` intervals, sorted by `start`.\n\nOnly rooms that actually appear in `bookings` should appear in the returned dictionary. Do not modify the `bookings` list or the tuples inside it. `bookings` may be given in any order, and the result must not depend on that order.",
+    "tests": [
+      "assert merge_bookings([]) == {}",
+      "assert merge_bookings([(8, 10, 'A'), (1, 3, 'A'), (3, 5, 'A')]) == {'A': [(1, 5), (8, 10)]}",
+      "assert merge_bookings([(1, 3, 'A'), (3, 5, 'A')]) == {'A': [(1, 5)]}",
+      "assert merge_bookings([(1, 10, 'A'), (3, 5, 'A')]) == {'A': [(1, 10)]}",
+      "assert merge_bookings([(2, 6, 'A'), (2, 6, 'A')]) == {'A': [(2, 6)]}",
+      "assert merge_bookings([(1, 3, 'A'), (2, 4, 'B'), (5, 6, 'A')]) == {'A': [(1, 3), (5, 6)], 'B': [(2, 4)]}",
+      "assert merge_bookings([(5, 5, 'A')]) == {'A': [(5, 5)]}",
+      "assert merge_bookings([(5, 5, 'A'), (5, 7, 'A')]) == {'A': [(5, 7)]}",
+      "assert (merge_bookings(b := [(8, 10, 'A'), (1, 3, 'A')]), b)[1] == [(8, 10, 'A'), (1, 3, 'A')]",
+      "assert merge_bookings([(2*i, 2*i+1, 'A') for i in range(50000)]) == {'A': [(2*i, 2*i+1) for i in range(50000)]}"
+    ],
+    "notes": "Third companion in the same-hypothesis stress series (stress_001: dict aggregation, stress_002: filtering/temporal aggregation, this one: interval/state reasoning) — deliberately a different algorithmic surface (not aggregation-in-disguise) to test whether the cheap=logic-bug / premium=contract-violation pattern generalizes or was specific to aggregation tasks. test_8 (index 8) checks input immutability via a single-line walrus-operator trick (calls the function on a fresh list, then compares that same list object against its original literal value — verified to correctly fail against a deliberately mutating implementation). test_9 is the timing/complexity proxy: 50,000 fully disjoint, non-adjacent intervals force any implementation that scans all previously-merged intervals per new booking (instead of sorting once up front) toward O(n^2); measured ~18.8s locally for that specific naive pattern vs ~0.02s for the sort-then-single-pass approach, against the pipeline's 10s timeout. As before: this is a resource-budget proxy, not a proof of Big-O."
   }
 ]
