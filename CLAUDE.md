@@ -18,6 +18,33 @@ Where things stand:
   both tiers 100%. Retained as the cascade's zero-escalation control.
 - **Stress series (`stress_dataset.json`, `stress_001`-`004`):** DONE.
   Aggregate: cheap 10/32 (31.25%), premium 14/32 (43.75%).
+- **`stress_005` (accumulation-before-comparison coverage closer):** DESIGNED,
+  APPROVED AND RUN — no longer deferred. Cascade log:
+  `logs/cascade_stress_log_v2.jsonl` (5 problems; the committed 4-problem
+  `logs/cascade_stress_log.jsonl` is deliberately left untouched;
+  `EXPERIMENTAL_FINDINGS.md` now reports the v2 numbers and cites both).
+  **Result: premium PASSED 7/7 — it did NOT reproduce the accumulation bug.**
+  Cheap failed 3/7 (0.4286) on tests {2,3,4,6}. Five-problem cascade:
+  cheap 0/5, escalation 5/5, premium recovery 2/5, final 2/5.
+  Two caveats recorded rather than glossed:
+  (a) cheap's failing-test fingerprint {2,3,4,6} is *identical* to the
+  reference accumulation bug's, but its actual defect is different — it
+  accumulates per player correctly and then overwrites the group entry once
+  per player instead of aggregating across players (test_2: leader 'B'
+  correct, total_points 60 instead of 110). The fingerprint identifies
+  "multi-player-per-group handling is broken", not which mechanism broke it.
+  (b) premium's code is not in the cascade log (a clean pass drops debug
+  fields, rule 6), so it was recovered by a separate single audit run outside
+  the cascade: `logs/stress_005_premium_audit.jsonl` (also lean, no code) plus
+  `logs/stress_005_premium_audit_console.json` (the only stored copy of the
+  code). Same prompt/model/temperature=0/seed=42 and same outcome, so very
+  likely the cascade's code, but not verified byte-for-byte. The audited code
+  DOES accumulate correctly (sums per player per group, then compares). It
+  has a second, untested defect: `player_points[player]` is initialized only
+  for the player's first group, so a player appearing in two groups raises
+  `KeyError` (`[('A','G1',10), ('A','G2',5)]`). No stress_005 test covers
+  that; tests stay frozen (rule 3). Supported claim: "no general accumulation
+  blind spot" — NOT "premium's code is correct", and NOT "stress_001 fixed".
 - **Stage 1 cascade:** DONE, both datasets. Logs:
   `logs/cascade_stress_log.jsonl`, `logs/cascade_pilot_log.jsonl`.
 - **`schema_probe` (experimental shadow path):** RUN. 3/3 pre-registered
@@ -26,16 +53,9 @@ Where things stand:
   `test_status_taxonomy.py`, `test_cascade_shape.py`, `test_schema_probe.py`.
 
 ### Deliberately deferred — NOT forgotten
-Both of these are recorded decisions. Do not treat either as an oversight to
-be quietly fixed, and do not start either without asking.
+This is a recorded decision. Do not treat it as an oversight to be quietly
+fixed, and do not start it without asking.
 
-- **`stress_005` — known coverage gap, not yet addressed.** `stress_001`'s
-  test set does not discriminate a tie-break bug we know is present in the
-  recovered premium code (it compares per-record revenue against
-  `top_product_revenue` rather than accumulated per-product revenue, and
-  passes all 7 tests anyway). Rule 3 forbids adding a discriminating test to
-  a problem already run against models, so closing this needs a NEW problem.
-  Deferred pending a decision on scope.
 - **`schema_probe`-as-a-feature — research hypothesis pending more
   evidence.** Nothing in the production path uses it; it is a diagnostic that
   showed our failure-mode labeling was wrong. Whether output-shape repair
@@ -46,6 +66,10 @@ Other open limitations (sample size, `schema_probe`'s depth=1 limit, the
 untested CRASH/TIMEOUT heuristic, the one stale log row, single model family)
 are catalogued in `EXPERIMENTAL_FINDINGS.md` under "Known Limitations / Open
 Questions". That section is the canonical list.
+
+NOTE: `EXPERIMENTAL_FINDINGS.md` HAS been updated for `stress_005` (Stress
+n=5 section, Limitation 1 update incl. the audit and the KeyError, Limitation
+2, and the "pass/fail pattern underdetermines its cause" methodology entry).
 
 ## Non-negotiable methodology rules
 These encode decisions already made deliberately; do not change them

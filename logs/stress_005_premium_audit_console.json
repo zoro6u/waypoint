@@ -1,0 +1,19 @@
+{
+  "problem_id": "stress_005",
+  "source": "stress",
+  "difficulty": "stress",
+  "task_type": "composite",
+  "model": "premium",
+  "model_name": "qwen2.5-coder:7b",
+  "temperature": 0.0,
+  "latency_ms": 134761,
+  "_raw_response": "```python\ndef leaderboard_by_group(entries):\n    group_totals = {}\n    player_points = {}\n\n    for player, group, points in entries:\n        if group not in group_totals:\n            group_totals[group] = 0\n        if player not in player_points:\n            player_points[player] = {group: 0}\n\n        group_totals[group] += points\n        player_points[player][group] += points\n\n    result = {}\n    for group, total in group_totals.items():\n        max_points = -1\n        leader = None\n        for player, points in player_points.items():\n            if group in points and points[group] > max_points:\n                max_points = points[group]\n                leader = player\n            elif group in points and points[group] == max_points and player < leader:\n                leader = player\n\n        result[group] = {\"total_points\": total, \"leader\": leader}\n\n    return result\n```",
+  "status": "PASS",
+  "passed": true,
+  "tests_passed": 7,
+  "tests_total": 7,
+  "pass_rate": 1.0,
+  "failed_tests": [],
+  "_raw_output": "============================= test session starts ==============================\nplatform linux -- Python 3.12.14, pytest-8.4.2, pluggy-1.6.0 -- /usr/local/bin/python\nrootdir: /sandbox\ncollecting ... collected 7 items\n\ntest_solution.py::test_0 PASSED                                          [ 14%]\ntest_solution.py::test_1 PASSED                                          [ 28%]\ntest_solution.py::test_2 PASSED                                          [ 42%]\ntest_solution.py::test_3 PASSED                                          [ 57%]\ntest_solution.py::test_4 PASSED                                          [ 71%]\ntest_solution.py::test_5 PASSED                                          [ 85%]\ntest_solution.py::test_6 PASSED                                          [100%]\n\n============================== 7 passed in 0.02s ===============================\n\n",
+  "_extracted_code": "def leaderboard_by_group(entries):\n    group_totals = {}\n    player_points = {}\n\n    for player, group, points in entries:\n        if group not in group_totals:\n            group_totals[group] = 0\n        if player not in player_points:\n            player_points[player] = {group: 0}\n\n        group_totals[group] += points\n        player_points[player][group] += points\n\n    result = {}\n    for group, total in group_totals.items():\n        max_points = -1\n        leader = None\n        for player, points in player_points.items():\n            if group in points and points[group] > max_points:\n                max_points = points[group]\n                leader = player\n            elif group in points and points[group] == max_points and player < leader:\n                leader = player\n\n        result[group] = {\"total_points\": total, \"leader\": leader}\n\n    return result\n"
+}

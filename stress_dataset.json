@@ -78,5 +78,24 @@
       "assert schedule_tasks([('A', 1, []), ('B', 2, ['A']), ('C', 5, ['A']), ('D', 1, ['B', 'C'])]) == [('A', 0, 1), ('B', 1, 3), ('C', 1, 6), ('D', 6, 7)]"
     ],
     "notes": "Fourth stress problem — deliberately keeps the SAME output shape as stress_003 (list[tuple], no dict) to isolate the output-shape hypothesis refined after stress_003: premium's failures in stress_001/002 were on dict outputs with a named, fixed-key schema (an extra key broke the exact-match test); stress_003 (list[tuple] output) had no such schema surface and premium passed cleanly. This problem changes the TASK SURFACE completely (dependency/topological reasoning instead of interval merging) while holding output shape constant, to see if that holds. Deliberately NOT a timing/complexity stress case (no large-input test) — the goal here is isolating the output-shape variable, not re-testing performance under timeout, per explicit design decision to keep this problem purely functional. Prompt and tests are frozen before running either model; not to be revised after seeing results."
+  },
+  {
+    "id": "stress_005",
+    "source": "stress",
+    "difficulty": "stress",
+    "task_type": "composite",
+    "function_name": "leaderboard_by_group",
+    "language": "python",
+    "prompt": "Write a Python function named `leaderboard_by_group` that takes a list of scoring entries, `entries`. Each entry is a tuple `(player, group, points)` where `player` and `group` are strings and `points` is a non-negative integer. The same player may appear in multiple entries within the same group (each entry is a separate scoring event, not a running total).\n\nReturn a dictionary mapping each group to another dictionary with exactly two keys:\n- \"total_points\": the sum of `points` across every entry in that group (all players combined).\n- \"leader\": the player with the highest total points WITHIN that group, where a player's total is the sum of `points` across all of THEIR entries in that group (a player who appears three times contributes the sum of all three entries, not just their single highest entry). If two or more players are tied for the highest total, return the one that is lexicographically smallest.\n\nGroups may appear in `entries` in any order. If `entries` is empty, return an empty dictionary.",
+    "tests": [
+      "assert leaderboard_by_group([]) == {}",
+      "assert leaderboard_by_group([('A', 'G1', 10)]) == {'G1': {'total_points': 10, 'leader': 'A'}}",
+      "assert leaderboard_by_group([('A', 'G1', 50), ('B', 'G1', 20), ('B', 'G1', 20), ('B', 'G1', 20)]) == {'G1': {'total_points': 110, 'leader': 'B'}}",
+      "assert leaderboard_by_group([('A', 'G1', 50), ('X', 'G2', 5), ('B', 'G1', 20), ('Y', 'G2', 5), ('B', 'G1', 20), ('B', 'G1', 20)]) == {'G1': {'total_points': 110, 'leader': 'B'}, 'G2': {'total_points': 10, 'leader': 'X'}}",
+      "assert leaderboard_by_group([('Bravo', 'G1', 30), ('Alpha', 'G1', 10), ('Alpha', 'G1', 20)]) == {'G1': {'total_points': 60, 'leader': 'Alpha'}}",
+      "assert leaderboard_by_group([('A', 'G1', 10), ('B', 'G2', 20)]) == {'G1': {'total_points': 10, 'leader': 'A'}, 'G2': {'total_points': 20, 'leader': 'B'}}",
+      "assert leaderboard_by_group([('A', 'G1', 100), ('B', 'G1', 30), ('B', 'G1', 30), ('B', 'G1', 30), ('B', 'G1', 30), ('B', 'G1', 30)]) == {'G1': {'total_points': 250, 'leader': 'B'}}"
+    ],
+    "notes": "Coverage-gap closer for stress_001's known limitation (see EXPERIMENTAL_FINDINGS.md limitation 1): premium's stress_001 code compared each individual transaction's revenue against the current leader's single stored revenue, never accumulating a repeated product's revenue across its multiple appearances before comparing. stress_001's own test set could not catch this because no test had a lower-per-transaction competitor whose SUM across repeats exceeded a higher single-transaction competitor. This problem is a deliberate, acknowledged transplant of that exact pattern into a new domain (leaderboard instead of sales) rather than a new dataset entirely, per rule 3 (never edit a frozen problem's tests; add a new problem instead). test_2 (accumulation_beats_single) is the direct transplant, verified to catch a reference implementation of the actual stress_001 premium bug pattern (buggy version returns leader='A', correct returns leader='B' on that exact case). test_3 repeats the same property with the accumulating player's entries interleaved with an unrelated group, to rule out any positional/adjacency shortcut. Deliberately NOT a timing/complexity case, matching stress_004's precedent of isolating one variable at a time — this problem exists to test accumulation-before-comparison specifically, nothing else."
   }
 ]

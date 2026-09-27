@@ -1,0 +1,1 @@
+{"problem_id": "stress_005", "source": "stress", "difficulty": "stress", "task_type": "composite", "model": "premium", "model_name": "qwen2.5-coder:7b", "temperature": 0.0, "latency_ms": 134761, "status": "PASS", "passed": true, "tests_passed": 7, "tests_total": 7, "pass_rate": 1.0, "failed_tests": []}

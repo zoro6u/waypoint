@@ -203,19 +203,29 @@ Zero escalations on a set already known to be saturated. The router never
 reached premium. This is the sanity check the saturated benchmark was kept
 for, and it passed.
 
-### Stress (n=4) — the signal
+### Stress (n=5) — the signal
+
+Source: `logs/cascade_stress_log_v2.jsonl`, a full re-run that adds
+`stress_005` (see Known Limitations #1). The first sweep,
+`logs/cascade_stress_log.jsonl` (n=4: premium_recovery_rate and
+final_pass_rate both 1/4 = 0.250), is kept unchanged as committed. On
+`stress_001`–`004` the re-run reproduced every status, pass rate, failed-test
+list and extracted code. The only differences are latencies, pytest's
+reported run time, and `stress_003`'s `cheap_failed_tests`. That field is
+now populated because this run came after the `TIMEOUT` fix (see
+Limitation 5).
 
 | metric | value |
 |---|---|
-| cheap_pass_rate | 0/4 = 0.000 |
-| escalation_rate | 4/4 = 1.000 |
-| premium_recovery_rate | 1/4 = 0.250 |
-| final_pass_rate | 1/4 = 0.250 |
-| mean cheap latency | 28,518 ms |
-| mean total latency, escalated rows | 133,540 ms |
+| cheap_pass_rate | 0/5 = 0.000 |
+| escalation_rate | 5/5 = 1.000 |
+| premium_recovery_rate | 2/5 = 0.400 |
+| final_pass_rate | 2/5 = 0.400 |
+| mean cheap latency | 24,521 ms |
+| mean total latency, escalated rows | 122,970 ms |
 
-Escalation costs roughly **5× the cheap-only latency** and bought one
-recovery in four.
+Escalation costs roughly **5× the cheap-only latency** and bought two
+recoveries in five.
 
 Per problem:
 
@@ -225,20 +235,22 @@ Per problem:
 | stress_002 | VALUE_MISMATCH 0.5 | VALUE_MISMATCH 0.25 | fail |
 | stress_003 | TIMEOUT 0.2 | **PASS 1.0** | **pass** |
 | stress_004 | VALUE_MISMATCH 0.1429 | VALUE_MISMATCH 0.1429 | fail |
+| stress_005 | VALUE_MISMATCH 0.4286 | **PASS 1.0** | **pass** |
 
 ### Recovery by cheap failure type
 
 | cheap_status | count | premium recovery |
 |---|---|---|
-| VALUE_MISMATCH | 2 | 0/2 |
+| VALUE_MISMATCH | 3 | 1/3 |
 | RUNTIME_ERROR | 1 | 0/1 |
 | TIMEOUT | 1 | 1/1 |
 
-The single recovery came from the `TIMEOUT` row. The directional reading —
-that a cheap model *hanging* may say less about problem difficulty than a
-cheap model confidently returning wrong values — is **one observation per
-cell** and is not a basis for a routing rule. It is recorded as a question,
-not a result.
+On the n=4 sweep, the single recovery came from the `TIMEOUT` row. That
+suggested a cheap model *hanging* might say less about problem difficulty
+than a cheap model confidently returning wrong values. `stress_005` adds a
+recovery from a `VALUE_MISMATCH` row, which already weakens that reading.
+Every cell still holds one to three observations. That is not a basis for a
+routing rule, so this is recorded as a question, not a result.
 
 Note also that premium's recovery on `stress_003` is a case where the cheap
 tier timed out on a 50,000-element input while the premium tier did not:
@@ -347,19 +359,61 @@ pass/fail numbers never changed.
 
 Everything below is documented as pending. None of it is resolved.
 
-**1. `stress_001`'s test set does not discriminate a bug we know is there.**
+**1. `stress_001`'s test set does not discriminate a bug we know is there —
+partly answered by `stress_005`, not closed.**
 The hedge on `stress_001` was that its `top_product` tie-break compares
 per-record revenue against `top_product_revenue` rather than accumulated
 per-product revenue. It passed all 7 tests anyway. The repaired code may
 still be wrong in a way those tests cannot catch, so the `RECOVERED` verdict
 is only as strong as the test set behind it. Adding a discriminating test to
-a problem already run against models is disallowed (it would invalidate the
-comparison), so this needs a **new** problem — `stress_005`. **Deliberately
-deferred, not forgotten.**
+a problem already run against models is disallowed, so this needed a **new**
+problem.
 
-**2. Sample size.** n=4 problems / n=32 test assertions on the stress set;
-n=12 on the pilot. The recovery-by-failure-type table has **one observation
-per cell**. These are **exploration signals, not statistical claims** about
+*Update — `stress_005`.* That problem moves stress_001's accumulate-then-compare
+pattern into a new domain (a leaderboard instead of sales). Before any model
+saw it, test_2 was checked and does catch a reference implementation of the
+stress_001 bug. **Premium passed 7/7.** Five-problem cascade
+(`logs/cascade_stress_log_v2.jsonl`): premium_recovery_rate 1/4 → **2/5**,
+final_pass_rate 1/4 → **2/5**.
+
+What this supports, and only this: **premium has no general accumulation
+blind spot.** Its audited stress_005 code sums each player's entries within a
+group (`player_points[player][group] += points`) over all entries first. Only
+then does it compare totals within each group.
+
+What it does **not** support:
+- **That the stress_001 bug is fixed.** stress_001's premium code is still
+  wrong in the way described above. stress_005 is a different problem and a
+  different generation, so it tells us nothing about that code.
+- **That premium's stress_005 code is correct in general.** The audit found a
+  second defect that no frozen test exercises. `player_points[player]` is
+  set up only for the first group a player appears in, so a player who
+  appears in two groups raises `KeyError`
+  (`[('A','G1',10), ('A','G2',5)]` → `KeyError: 'G2'`). No stress_005 test
+  has the same player in two groups, and the prompt does not forbid it. So
+  the 7/7 is limited by its test set in the same way stress_001's was. Its
+  tests stay frozen (rule 3).
+
+*How the code was obtained.* The cascade row for stress_005 does **not**
+contain premium's code. A clean PASS strips debug fields from persisted
+logs (the lean-log convention), so the cascade log records only that premium
+passed. The code was recovered by a **separate single run, outside the
+cascade**:
+`python runner.py --problem stress_005 --model qwen2.5-coder:7b --tag premium
+--dataset stress_dataset.json --log logs/stress_005_premium_audit.jsonl`.
+That run's persisted log strips the code for the same reason, so the code is
+preserved only from its console output
+(`logs/stress_005_premium_audit_console.json`). The audit run used the same
+prompt, model, temperature=0 and seed=42, and got the same outcome (PASS,
+7/7). It is therefore very likely the same code the cascade produced, but
+that is inferred from the reproducibility check, not verified byte for byte:
+the cascade's code was never stored. Latency differed (90,853 ms vs
+134,761 ms). That is expected, because determinism covers the generated
+text, not wall-clock time.
+
+**2. Sample size.** n=5 problems / n=39 test assertions on the stress set;
+n=12 on the pilot. The recovery-by-failure-type table has **one to three
+observations per cell**. These are **exploration signals, not statistical claims** about
 the model family. No confidence interval is computed because none would be
 meaningful at this n.
 
@@ -407,7 +461,7 @@ a dataset where more than one problem exercises it.
 
 ## On the methodology
 
-The routing results above are thin by design — n=4 is an exploration signal.
+The routing results above are thin by design — n=5 is an exploration signal.
 The transferable part of this project is the discipline that produced them.
 
 **Predictions were registered before runs.** The `schema_probe` expectation
@@ -439,8 +493,10 @@ carefully as the successes.
 **Tests and prompts were frozen once run.** No problem's prompt or hidden
 tests were edited after a model had seen them. Where a fix was needed
 post-run, the rule is to add a **new** problem instead — which is why the
-`stress_001` coverage gap is deferred to a `stress_005` rather than patched
-in place.
+`stress_001` coverage gap was addressed by a new problem, `stress_005`,
+rather than patched in place. The same rule applies to `stress_005` itself:
+the multi-group `KeyError` found in premium's passing code is recorded as a
+limitation, not fixed by adding a test.
 
 **Negative results were documented, not hidden.** The saturated pilot
 benchmark is recorded as a finding with a detector attached, not quietly
@@ -457,6 +513,20 @@ exact list of deleted keys. The `stress_002` check exists specifically to
 distinguish "the repair ran and did not help" from "the repair silently did
 nothing" — two outcomes that are identical in the metrics and completely
 different in meaning.
+
+**A pass/fail pattern underdetermines its cause.** Different mechanisms can
+produce the same metrics. Two cases are documented above: `stress_002`'s
+unchanged 0.25 → 0.25 under schema_probe, which a silent no-op would also
+have produced, and `stress_002`'s "schema" label, which turned out to be a
+semantic failure. A third comes from `stress_005`. Cheap failed exactly tests
+{2, 3, 4, 6}, the same set the reference stress_001-style bug fails. Its
+mechanism is the reverse of that bug. The reference bug compares players
+without first summing each player's entries. Cheap sums each player's
+entries correctly but never compares players: it overwrites the group's
+entry once per player, so the last player processed wins. On test_2 it got
+`leader` 'B' right only because B came last, and `total_points` was 60
+instead of 110. The fingerprint tells you that "multiple players in one
+group" breaks the code, not which step broke it.
 
 **Refusal was preferred over guessing.** Where the method's preconditions do
 not hold, the code abstains with a named verdict rather than producing a
