@@ -155,7 +155,6 @@ key derivation is NOT general over nesting depth. It handles exactly
 else rather than guessing. See the module docstring.
 
 Do NOT start designing Stage 2 or adding new stress problems without
-asking first. Outstanding decisions the user has not settled:
-- Whether to re-run the stress sweep so stress_003's row picks up the
-  now-populated TIMEOUT `failed_tests` (currently `[]` in the committed
-  log, pre-fix).
+asking first. Previously outstanding, now settled:
+- v2 run supersedes the practical need to regenerate v1 — v1 stays as-is per
+  Limitation 5.
