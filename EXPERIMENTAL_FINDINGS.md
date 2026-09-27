@@ -434,12 +434,18 @@ certainty. It is covered by synthetic tests; **no real `CRASH` has occurred
 yet**, so the first one should be treated as a test of that logic rather than
 as data.
 
-**5. One stale row in a committed log.** `logs/cascade_stress_log.jsonl`
-still holds `stress_003`'s pre-fix row with `cheap_failed_tests: []`, from
-before the `TIMEOUT` branch was changed to keep verdicts for tests that
-completed. Regenerating it costs a ~9-minute sweep that rewrites committed
-experimental data, and `stress_003` is outside the schema_probe scope anyway
-(premium passed it without a failed escalation). **Consciously left as-is.**
+**5. One stale row in the first committed stress log (v1 only).** This
+applies specifically to `logs/cascade_stress_log.jsonl` (v1, n=4). It still
+holds `stress_003`'s pre-fix row with `cheap_failed_tests: []`, from before
+the `TIMEOUT` branch was changed to keep verdicts for tests that completed.
+Regenerating v1 in place would rewrite committed experimental data, and
+`stress_003` is outside the schema_probe scope anyway (premium passed it
+without a failed escalation). **v1 is consciously left as-is.**
+`logs/cascade_stress_log_v2.jsonl` (n=5, the source for the Stress section
+above) does **not** have this gap. It was generated after the `TIMEOUT` fix,
+so its `stress_003` row has all seven `cheap_failed_tests` entries
+(`UNKNOWN_TRUNCATED`). The gap is therefore limited to v1. It was not fixed
+by editing v1.
 
 **6. Single model family, single seed.** Everything here is
 `qwen2.5-coder:1.5b` vs `qwen2.5-coder:7b` at `seed=42`. Reproducibility

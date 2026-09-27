@@ -46,7 +46,12 @@ Where things stand:
   that; tests stay frozen (rule 3). Supported claim: "no general accumulation
   blind spot" — NOT "premium's code is correct", and NOT "stress_001 fixed".
 - **Stage 1 cascade:** DONE, both datasets. Logs:
-  `logs/cascade_stress_log.jsonl`, `logs/cascade_pilot_log.jsonl`.
+  `logs/cascade_pilot_log.jsonl` (pilot, n=12);
+  `logs/cascade_stress_log.jsonl` (stress v1, n=4 — first sweep, frozen as
+  committed, pre-TIMEOUT-fix `stress_003` row); and
+  `logs/cascade_stress_log_v2.jsonl` (stress v2, n=5 — full re-run adding
+  `stress_005`; current source for the stress numbers in
+  `EXPERIMENTAL_FINDINGS.md`).
 - **`schema_probe` (experimental shadow path):** RUN. 3/3 pre-registered
   predictions matched; 1/3 recovery. Log: `logs/schema_probe_log.jsonl`.
 - Verified test suites: 34 + 29 + 31 = 94 synthetic checks across
