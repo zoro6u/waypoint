@@ -184,11 +184,22 @@ this stage, deliberately, so that any future failure-type-aware rule is built
 on observed data rather than on the interpretation we had already had to
 revise once.
 
-Before the sweep, `ollama_client.py`'s read timeout was raised **120 s → 300
+Before the sweep, `ollama_client.py`'s read timeout was raised **120 s → 180
 s**. Premium latencies of 85,016–117,887 ms were running at up to **98% of
 the old ceiling**, which is what had killed `stress_004` premium earlier.
 This is a transport setting, not part of the benchmark definition, and
 `latency_ms` is still recorded truthfully.
+
+> **Correction (2026-10-05).** This paragraph, and the message of commit
+> `03e226e`, originally said the timeout was raised to **300 s**. The
+> committed code says otherwise: `call_ollama`'s `timeout_s` default is 120
+> in `c497936` and **180** in `03e226e` and every commit since, and no caller
+> overrides it (`runner.py` calls `call_ollama` without `timeout_s`). Git
+> records only committed code, so it cannot prove which value was in the
+> working tree at the moment each sweep ran. The discrepancy does not affect
+> any recorded result: no cascade run came near either ceiling — the highest
+> per-tier latency in the committed cascade logs is 117,887 ms (v1; v2's is
+> 109,897 ms), and neither log contains a `runner_error`.
 
 ### Pilot (n=12) — the control
 
