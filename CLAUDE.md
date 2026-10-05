@@ -9,6 +9,16 @@ rigor, not a working product yet — every claim in this repo has to be
 backed by a verified test run, not assumed.
 
 ## Current status
+**WAYPOINT is CLOSED (October 2026).** It ends with the Stage 1 research
+pipeline plus one narrow gateway on top of it — no further work is planned.
+The gateway (`server.py`, commit `ef9ed5b`): `POST /route` on the unchanged
+cheap→premium cascade; stdlib `http.server`, bound to 127.0.0.1 only, one
+request at a time, no auth. The CALLER supplies the tests (there are no hidden
+tests outside the datasets). **`passed` in its response means "passed the
+caller's tests" — NOT "the code is correct"**: e.g. the stress_005 code it
+returns passes all 7 tests and still has the untested KeyError in caveat (b)
+below. Security limits and response fields are in `README.md`.
+
 **`EXPERIMENTAL_FINDINGS.md` is the full chronological narrative** — what was
 assumed at each stage, what the data showed, and what had to be corrected.
 Read it there rather than duplicating a summary here that would go stale.
@@ -38,7 +48,10 @@ Where things stand:
   the cascade: `logs/stress_005_premium_audit.jsonl` (also lean, no code) plus
   `logs/stress_005_premium_audit_console.json` (the only stored copy of the
   code). Same prompt/model/temperature=0/seed=42 and same outcome, so very
-  likely the cascade's code, but not verified byte-for-byte. The audited code
+  likely the cascade's code, but not verified byte-for-byte. (Oct 2026: two
+  later gateway runs of the same prompt returned code byte-identical to the
+  audit copy — more evidence of determinism, still not a direct comparison
+  with the v2 cascade row, whose code was never stored.) The audited code
   DOES accumulate correctly (sums per player per group, then compares). It
   has a second, untested defect: `player_points[player]` is initialized only
   for the player's first group, so a player appearing in two groups raises
@@ -55,11 +68,26 @@ Where things stand:
 - **`schema_probe` (experimental shadow path):** RUN. 3/3 pre-registered
   predictions matched; 1/3 recovery. Log: `logs/schema_probe_log.jsonl`.
 - Verified test suites: 34 + 29 + 31 = 94 synthetic checks across
-  `test_status_taxonomy.py`, `test_cascade_shape.py`, `test_schema_probe.py`.
+  `test_status_taxonomy.py`, `test_cascade_shape.py`, `test_schema_probe.py`;
+  plus the gateway's `test_runner_refactor.py` (159: `run_one`/`run_cascade`
+  ≡ the new dict-based paths on all 17 problems) and `test_server.py` (108:
+  validator, response shape, HTTP layer, hardening). All plain scripts:
+  `python <file>` — no pytest on the host.
+- Ollama's per-call timeout is **180 s** (`call_ollama` default). Older text
+  said 300 s; corrected in `EXPERIMENTAL_FINDINGS.md` (commit `4473543`).
 
 ### Deliberately deferred — NOT forgotten
 This is a recorded decision. Do not treat it as an oversight to be quietly
 fixed, and do not start it without asking.
+
+**Not to be built without asking first** (the project closed without them,
+on purpose):
+- a learned / failure-type-aware Stage 2 router;
+- a dashboard;
+- a third tier;
+- dollar-cost verification (no per-token pricing has been measured);
+- `schema_probe` as a feature (below);
+- expanding the stress set beyond `stress_001`–`005`.
 
 - **`schema_probe`-as-a-feature — research hypothesis pending more
   evidence.** Nothing in the production path uses it; it is a diagnostic that
@@ -123,38 +151,32 @@ without asking the user first:
 - `run_pilot.py` / `run_cascade.py` — sweep drivers over a dataset
 - `analyze_pilot.py` / `analyze_cascade.py` — metrics scripts
 - `pilot_dataset.json` / `stress_dataset.json` — the two problem sets
-- `README.md` — setup instructions, what's verified vs. not
+- `server.py` — local gateway (`POST /route`) over `cascade.run_cascade_problem`
+- `demo_gateway.py` — the gateway demo's pre-registered predictions
+- `README.md` — setup instructions, what's verified vs. not, gateway usage
+  and security limits
 
 ## Immediate task
-The Stage 1 cascade sweeps are DONE — see Current status above for the
-numbers, and re-read the logs rather than re-running if you only need
-the results:
+None — the project is closed (see Current status). If work resumes, ask
+before starting anything on the "Not to be built" list above.
+
+Re-read the logs rather than re-running if you only need the results:
 
 ```bash
-python analyze_cascade.py --log logs/cascade_stress_log.jsonl
-python analyze_cascade.py --log logs/cascade_pilot_log.jsonl
+python analyze_cascade.py --log logs/cascade_stress_log_v2.jsonl   # stress, current (n=5)
+python analyze_cascade.py --log logs/cascade_pilot_log.jsonl       # pilot control (n=12)
 ```
 
-Re-running a sweep regenerates committed experimental data and costs
-~9 min (stress) / ~2 min (pilot). Generations are byte-identical under
-temperature=0/seed=42, so a re-run is only worth it when the LOGGED
-FIELDS need to change, not the results.
+`logs/cascade_stress_log.jsonl` (v1, n=4) stays frozen as committed
+(Limitation 5). Re-running a sweep regenerates committed experimental data
+and costs ~11–13 min (stress, n=5) / ~2 min (pilot). Generations are
+byte-identical under temperature=0/seed=42 — a stress re-run on 2026-10-05
+reproduced all 5 v2 rows on every field except latency and pytest wall
+time — so a re-run is only worth it when the LOGGED FIELDS need to change,
+not the results.
 
-In progress: `schema_probe.py`, an experimental shadow evaluation path
-for the schema-contract failures premium hit on stress_001/002 (extra
-keys such as `top_product_revenue` leaking into the returned dict). It
-derives the expected key set from the frozen tests, deletes extra keys
-only, re-runs the SAME frozen tests via the existing `run_in_sandbox`,
-and reports `schema_repair_recovery_rate` as a SEPARATE experimental
-metric. It never overwrites `final_pass_rate`, and `sandbox.py`,
-`runner.py` and both dataset files stay byte-identical.
+`schema_probe` is finished as a diagnostic (see Current status); its
+depth=1 limit is documented in the module docstring and in
+`EXPERIMENTAL_FINDINGS.md`.
 
-Known limit of that method, stated deliberately: the contract-vs-data
-key derivation is NOT general over nesting depth. It handles exactly
-`dict[data_key] -> dict[contract_key] -> scalar` and refuses anything
-else rather than guessing. See the module docstring.
-
-Do NOT start designing Stage 2 or adding new stress problems without
-asking first. Previously outstanding, now settled:
-- v2 run supersedes the practical need to regenerate v1 — v1 stays as-is per
-  Limitation 5.
+To try the gateway: `python server.py`, then the curl example in `README.md`.
