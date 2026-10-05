@@ -42,6 +42,14 @@ def load_problem(problem_id: str, dataset_path: Path = None) -> dict:
 
 def run_one(problem_id: str, model: str, tag: str, timeout_s: int = 10, dataset_path: Path = None) -> dict:
     problem = load_problem(problem_id, dataset_path)
+    return run_problem(problem, model, tag, timeout_s=timeout_s)
+
+
+def run_problem(problem: dict, model: str, tag: str, timeout_s: int = 10) -> dict:
+    """Same as run_one, but takes the problem itself instead of looking it
+    up in a dataset file — the entry point for ad-hoc problems (server.py).
+    The dict must carry every field read below: id, source, difficulty,
+    task_type, prompt, function_name, tests."""
     prompt = PROMPT_TEMPLATE.format(prompt=problem["prompt"], function_name=problem["function_name"])
 
     gen = call_ollama(model=model, prompt=prompt, temperature=0.0)

@@ -22,12 +22,37 @@ so later analysis (groupby cheap_status, etc.) doesn't need to unpack
 nested JSON.
 """
 
-from runner import run_one
+from runner import run_one, run_problem
 
 
 def run_cascade(problem_id: str, cheap_model: str, premium_model: str,
                  timeout_s: int = 10, dataset_path=None) -> dict:
-    cheap = run_one(problem_id, cheap_model, "cheap", timeout_s=timeout_s, dataset_path=dataset_path)
+    # run_one is looked up in this module's globals at call time, so a
+    # test that monkeypatches cascade.run_one still intercepts every call
+    def run_tier(model, tag):
+        return run_one(problem_id, model, tag, timeout_s=timeout_s, dataset_path=dataset_path)
+    return _cascade(run_tier, cheap_model, premium_model)
+
+
+def run_cascade_problem(problem: dict, cheap_model: str, premium_model: str,
+                        timeout_s: int = 10, on_tier=None) -> dict:
+    """Same cascade over an in-memory problem dict (see runner.run_problem).
+
+    on_tier(tag, tier_record), if given, receives each tier's FULL runner
+    record (debug fields included) as soon as that tier finishes. The
+    cascade record itself drops those fields on a pass, so this is how a
+    caller that needs the extracted code (server.py) gets it without
+    changing the cascade record's shape."""
+    def run_tier(model, tag):
+        r = run_problem(problem, model, tag, timeout_s=timeout_s)
+        if on_tier is not None:
+            on_tier(tag, r)
+        return r
+    return _cascade(run_tier, cheap_model, premium_model)
+
+
+def _cascade(run_tier, cheap_model: str, premium_model: str) -> dict:
+    cheap = run_tier(cheap_model, "cheap")
 
     record = {
         "problem_id": cheap["problem_id"],
@@ -69,7 +94,7 @@ def run_cascade(problem_id: str, cheap_model: str, premium_model: str,
         })
         return record
 
-    premium = run_one(problem_id, premium_model, "premium", timeout_s=timeout_s, dataset_path=dataset_path)
+    premium = run_tier(premium_model, "premium")
     record.update({
         "premium_status": premium["status"],
         "premium_passed": premium["passed"],
